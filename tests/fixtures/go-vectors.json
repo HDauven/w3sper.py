@@ -1,0 +1,92 @@
+{
+  "globals": {
+    "heap_base": 1077232,
+    "item_size": 736,
+    "key_size": 32,
+    "minimum_stake": 1000000000000
+  },
+  "invalid_account_status": 253,
+  "profiles": [
+    {
+      "account": "sJTtHPh9uoDuwBaCaQcU4JJ6PV51mYLY8svNizX3JpcADxqLrnXWYXRbKsCRiBQanUeL35CBajhc42SGsBcgWFqrxF8vrLQZDTtmoTnG1D4QoKe9zqLyMT7Q1iwsskiqESN",
+      "address": "5DVKX3tkkr1gugktGGBu2NHMT2D86tKGXZBgVGswkfvpDLBKQQ6MebZsBKg1sBNWgKrVjfS7EW8SfvMmVEVymChB",
+      "bytes": "d2d65fb4b61d48d5094dade3b1c0e2b5b00ca620ccba2439ec6f0e3752858512846b7dd629993c69f5fd6761d888a9fa3e7b3ee317b94921acefa28ed021b0c69205c53331e5eef2bada65143ee2130a0a6fc26d00da605587ef9ec427ff5d917315d4e9c5eecdd5a65ee907243af8ab024806a848c701b9b95de97809b1c89927c1f7566d42bec2415ea0ed04586a7e00486d443da99ba760d69c52daf0cf03",
+      "index": 0
+    },
+    {
+      "account": "23UyF9stS95LsAxa6Q8JxvaaTu1TLKcW3usN5HQ3EovKe56hWLpa9QRDF1fxCNbnvoE4nBhqmVyyMVj3G1PwwuCYDXENRrLcZBfLUxPyBwGn3EMSz76YYRN3Na1yuJZbpP17",
+      "address": "4LweMaU5hgwQ5kmS8HabQmDE1vjEYzvDdshWd9zsH4aoqq4RKJBLNviydFmdkp5MK6AV1sQL3qwH4C6KFZRnmyJq",
+      "bytes": "a73f931ee237b0bab9ffba8ef044ed236a3f0e7d31ff1c0350f6c1074ee4f66f842a8b17d5b43c6ba3e5d5bf95ead2127efda95123e786a7e79e8a52e941689aaf93fd3563b4c799684fd3c94725497773e1766136f3680264b2130f28e21068349d2453a06677b793192a4e0e8cecd301ebf9a1706ec0eb5b806938e10bcc8d6ad6debce4e39cd607dc59573d89f758b68cabe1b8247ffe33d1cd4711344ed6",
+      "index": 1
+    },
+    {
+      "account": "uQW8vHnrqEQAK5wnbhqmuwBYoKHFnTiDTUUgg3SxUuZeAYNb2jsuUPLKJDZgqijWji2RQJehuLHEg1m7ZK67f2ptE2ZCrSGLDggGCbuQFn3rHKU9F1gmPTN68rE5gwDYLdz",
+      "address": "76xgh8ijQ1856Hm7oMRMiGpgRSGSH5aDFGj1ZCg7rb4unKoHbvyKxrLaTWKPPcNaA39gD8KTf48FNnVdrCmdDJ9",
+      "bytes": "0543461b53ae14cac46b3d59d0aca1ff34e2932bde4b3b032e3dec6f4394f088c7297eba6751039389b1ed253e65cb0fec7e6af4a3cb20a1956517843d0eaa1298217784666611663611453ba06fc66c892b0e4b50d4c638b3cacf2de4dfbae18a6d03d7e58cac70cca731b6ba90531312c997c06def35737b7d7e534deb723b6972134d36b889bce930773fe903cfac7469dd10f901eae4bd17316d089d1225",
+      "index": 255
+    }
+  ],
+  "provenance": {
+    "commit": "e096a859f55a8e2bb3583bdb44ceed52ba4d7110",
+    "go": "go1.27.1 linux/amd64",
+    "pr": 359,
+    "repository": "dusk-network/rusk-private",
+    "wasm_sha256": "f4c3eaa1843a70aa5780e1acbd41ced9c1bdf59255872a3ddd88408093fde8d2",
+    "wasm_version": "1.7.1"
+  },
+  "seed": "01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3ba",
+  "transfers": [
+    {
+      "bytes": "01ec000000000000002a9205c53331e5eef2bada65143ee2130a0a6fc26d00da605587ef9ec427ff5d917315d4e9c5eecdd5a65ee907243af8ab024806a848c701b9b95de97809b1c89927c1f7566d42bec2415ea0ed04586a7e00486d443da99ba760d69c52daf0cf0301af93fd3563b4c799684fd3c94725497773e1766136f3680264b2130f28e21068349d2453a06677b793192a4e0e8cecd301ebf9a1706ec0eb5b806938e10bcc8d6ad6debce4e39cd607dc59573d89f758b68cabe1b8247ffe33d1cd4711344ed600ca9a3b000000000000000000000000007ddaac00000000010000000000000000010000000000000000934942427708839652e4faf484a626deb7bb2b7c9050d619bca92b6271a7282e63385c601483ee394ab3ccc07cfa461c",
+      "chain_id": 42,
+      "deposit": "0",
+      "gas_limit": "2900000000",
+      "gas_price": "1",
+      "hash": "072cd70a7819c53f25028f5cb4f937b427823b5474d15871c4e309448fc5d133",
+      "name": "standard",
+      "nonce": "1",
+      "receiver_index": 1,
+      "sender_index": 0,
+      "value": "1000000000"
+    },
+    {
+      "bytes": "01ec000000000000002a9205c53331e5eef2bada65143ee2130a0a6fc26d00da605587ef9ec427ff5d917315d4e9c5eecdd5a65ee907243af8ab024806a848c701b9b95de97809b1c89927c1f7566d42bec2415ea0ed04586a7e00486d443da99ba760d69c52daf0cf0301af93fd3563b4c799684fd3c94725497773e1766136f3680264b2130f28e21068349d2453a06677b793192a4e0e8cecd301ebf9a1706ec0eb5b806938e10bcc8d6ad6debce4e39cd607dc59573d89f758b68cabe1b8247ffe33d1cd4711344ed600ca9a3b000000000000000000000000007ddaac00000000010000000000000000060000000000000000b2c1fd56ef07789b200cfaead17f3a7bc7539747e7fb6293496201b1c15e366e4d0ee073266802cf312dfb81b2e80a7d",
+      "chain_id": 42,
+      "deposit": "0",
+      "gas_limit": "2900000000",
+      "gas_price": "1",
+      "hash": "833af002b148b2e0c17ee01ed99e8ce48153ced1f5f909dd7a615929807c666b",
+      "name": "resolved_nonce",
+      "nonce": "6",
+      "receiver_index": 1,
+      "sender_index": 0,
+      "value": "1000000000"
+    },
+    {
+      "bytes": "01ec00000000000000ff98217784666611663611453ba06fc66c892b0e4b50d4c638b3cacf2de4dfbae18a6d03d7e58cac70cca731b6ba90531312c997c06def35737b7d7e534deb723b6972134d36b889bce930773fe903cfac7469dd10f901eae4bd17316d089d1225019205c53331e5eef2bada65143ee2130a0a6fc26d00da605587ef9ec427ff5d917315d4e9c5eecdd5a65ee907243af8ab024806a848c701b9b95de97809b1c89927c1f7566d42bec2415ea0ed04586a7e00486d443da99ba760d69c52daf0cf03ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00ffffffffffffffff00a5e1e4c1a8a0673fab7edeef8d4870834eaa2e59584de6da782e383e0526b19cbb6226a8a8e1c5b603ac5404ad442c30",
+      "chain_id": 255,
+      "deposit": "18446744073709551615",
+      "gas_limit": "18446744073709551615",
+      "gas_price": "18446744073709551615",
+      "hash": "f72e6c5e498f5b802e38a4ed6c8234b8bccb6f1674d9d0066e69092b9516c65c",
+      "name": "upper_bounds",
+      "nonce": "18446744073709551615",
+      "receiver_index": 0,
+      "sender_index": 255,
+      "value": "18446744073709551615"
+    },
+    {
+      "bytes": "018c00000000000000009205c53331e5eef2bada65143ee2130a0a6fc26d00da605587ef9ec427ff5d917315d4e9c5eecdd5a65ee907243af8ab024806a848c701b9b95de97809b1c89927c1f7566d42bec2415ea0ed04586a7e00486d443da99ba760d69c52daf0cf03000000000000000000000000000000000000000000000000000000000000000000000000000000000000008717a2beae7b94eb83298f5be33b0a46058c1ac656713035976df37aa9de7a6d490227950216cce886f2509062c6c2dd",
+      "chain_id": 0,
+      "deposit": "0",
+      "gas_limit": "0",
+      "gas_price": "0",
+      "hash": "4c2e29e1d1590901803c387005e5e42f27dd98921e41e2614ce00106156f7444",
+      "name": "self",
+      "nonce": "0",
+      "receiver_index": -1,
+      "sender_index": 0,
+      "value": "0"
+    }
+  ]
+}
