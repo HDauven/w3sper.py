@@ -25,7 +25,7 @@ def parse_from_dusk(dusk: str) -> int:
     """Parse ASCII decimal text with at most nine fractional digits; no floats."""
     if not isinstance(dusk, str):
         raise TypeError("Dusk must be decimal text")
-    if not re.fullmatch(r"[0-9]+(?:\.[0-9]{0,9})?", dusk):
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,9})?", dusk):
         raise ValueError("Dusk must be non-negative decimal text with at most 9 fractional digits")
     whole, _, fraction = dusk.partition(".")
     return int(whole) * LUX_PER_DUSK + int(fraction.ljust(DECIMALS, "0"))
@@ -37,7 +37,7 @@ def validate_chain_id(chain_id: int) -> int:
 
 @dataclass(frozen=True)
 class Gas:
-    """None/non-positive values select Go SDK defaults; signing enforces u64."""
+    """Positive u64 budgets; only None defaults. The total fee must fit u64."""
 
     limit: int | None = None
     price: int | None = None
@@ -45,9 +45,11 @@ class Gas:
     def __post_init__(self):
         for name, default in (("limit", DEFAULT_GAS_LIMIT), ("price", DEFAULT_GAS_PRICE)):
             value = getattr(self, name)
-            if value is not None:
-                integer(value, f"gas {name}")
-            object.__setattr__(self, name, default if value is None or value <= 0 else value)
+            value = default if value is None else uint(value, 64, f"gas {name}")
+            if value == 0:
+                raise ValueError(f"gas {name} must be positive")
+            object.__setattr__(self, name, value)
+        uint(self.total, 64, "total gas fee")
 
     @property
     def total(self) -> int:

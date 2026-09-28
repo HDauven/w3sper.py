@@ -19,12 +19,11 @@ class ValueTests(unittest.TestCase):
 
     def test_exact_large_and_noncanonical_decimals(self):
         self.assertEqual(parse_from_dusk("0001.100"), 1_100_000_000)
-        self.assertEqual(parse_from_dusk("1."), 1_000_000_000)
         for n in (10**100, 10**100 + 1, 999):
             self.assertEqual(parse_from_dusk(format_to_dusk(n)), n)
 
     def test_bad_dusk(self):
-        for value in ("", ".1", ".", "1.0000000001", "-1", "+1", "1e9", " 1", "1\n", "1.2.3", "１", "1_000", "nan"):
+        for value in ("", ".1", ".", "1.", "1.0000000001", "-1", "+1", "1e9", " 1", "1\n", "1.2.3", "１", "1_000", "nan"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 parse_from_dusk(value)
         for value in (None, True, 1, 1.1):
@@ -41,9 +40,11 @@ class ValueTests(unittest.TestCase):
     def test_gas(self):
         self.assertEqual(Gas().limit, 2_900_000_000)
         self.assertEqual(Gas().price, 1)
-        self.assertEqual(Gas(0, -5), Gas())
         self.assertEqual(Gas(3_000_000, 2).total, 6_000_000)
-        self.assertEqual(Gas(2**64, 2).total, 2**65)
+        for limit, price in ((0, 1), (1, 0), (-1, 1), (1, -1), (2**64, 1), (2**64 - 1, 2)):
+            with self.assertRaises(ValueError):
+                Gas(limit, price)
+        self.assertEqual(Gas(2**64 - 1, 1).total, 2**64 - 1)
         with self.assertRaises(FrozenInstanceError):
             Gas().price = 2
         for value in (True, "1", 1.0):
