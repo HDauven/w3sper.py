@@ -60,6 +60,24 @@ public identities; its `close()` disposes them. `SigningProfile` is a
 compatibility name for `ProfileSigner`, now retaining child keys, not a seed.
 Closing `ProfileGenerator` does not revoke independently issued signers.
 
+## Migrating existing callers
+
+See [CHANGELOG.md](CHANGELOG.md) for the unreleased API changes.
+
+- Prefer `ProfileGenerator` for public identities and explicitly issue a signer
+  with `profiles.signer(public)` before binding a signing `Bookkeeper` entry.
+  The compatibility `Generator` still returns cached signers, not public profiles.
+- Close/dispose signers on wallet lock. Provider refusal or closing the public
+  generator does not revoke independently issued signers. Signing capabilities
+  now own selected child keys rather than retaining a master seed.
+- Upgrade the SDK and bundled wallet-core together; the previous host ABI is not
+  compatible with the current artifact. Low-level `moonlight` nonce arguments are
+  final nonces, while high-level transfer builders take the current nonce.
+- Treat builders as immutable, retain fluent return values, close streams when
+  stopping early, and check execution errors after submission.
+- Revalidate explicit amounts/gas and follow the synchronous cancellation limits
+  below; permissive numeric coercion and instant interruption are not guaranteed.
+
 ## Network and wallet state
 
 This independent example creates fresh live contexts and **submits a Phoenix
@@ -116,7 +134,9 @@ available through `network.node` and `network.blocks`.
 Account sync supports `.balances()`, `.stakes()`, `.stake_keys()` and
 `.history(profile, from_height=0, to_height=None, limit=None, order="asc")`.
 History is a closable iterator of enriched entries with exact amounts, fees,
-block metadata, memo, method and success. Stake owner lookup requires the
+block metadata, memo, method and success. Enrichment is matched by GraphQL alias,
+not response-object order, avoiding the pinned JS history association defect.
+Stake owner lookup requires the
 stake data driver registered under `STAKE`.
 
 `AddressSyncer` provides `.notes(signers, from_=height_or_bookmark)`, `.spent()`,

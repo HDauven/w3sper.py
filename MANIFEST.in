@@ -1,4 +1,4 @@
-include LICENSE NOTICE.md
+include LICENSE NOTICE.md CHANGELOG.md
 recursive-include src/w3sper *.wasm
 recursive-include tests *.py *.json *.go *.md *.txt *.wasm *.wat
 recursive-include examples *.py
