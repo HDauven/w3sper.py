@@ -106,7 +106,11 @@ class Budget:
                 self._timer.join()
 
     def __enter__(self):
-        self.check()
+        try:
+            self.check()
+        except BaseException:
+            self.close()
+            raise
         return self
 
     def __exit__(self, *exc):

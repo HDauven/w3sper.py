@@ -85,6 +85,27 @@ class DeadlineTests(HTTPTestCase):
             self.network.query("answer", cancel=token)
         self.assertEqual(self.server.requests, [])
 
+    def test_cancel_between_budget_creation_and_entry_releases_timer(self):
+        token = CancellationToken()
+        create_budget = self.network.budget
+        budgets = []
+        def cancel_before_entry(*args, **kwargs):
+            budget = create_budget(*args, **kwargs)
+            budgets.append(budget)
+            token.cancel()
+            return budget
+        try:
+            with patch.object(self.network, "budget", side_effect=cancel_before_entry):
+                with self.assertRaises(CancelledError):
+                    self.network.execute(b"not submitted", timeout=60, cancel=token)
+            self.assertEqual(len(budgets), 1)
+            self.assertFalse(budgets[0]._timer.is_alive())
+            self.assertEqual(token._callbacks, set())
+            self.assertEqual(self.server.requests, [])
+        finally:
+            for budget in budgets:
+                budget.close()
+
     def test_request_constructor_failures_release_all_timed_resources(self):
         before = set(threading.enumerate())
         for url in ("http://[broken", "http://localhost:99999", "not-a-url", "ftp://localhost", "http://user:secret@localhost"):
