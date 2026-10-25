@@ -15,7 +15,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers["Content-Length"]))
-        self.server.requests.append((self.path, self.headers, json.loads(body)))
+        self.server.requests.append((self.path, self.headers, json.loads(body) if body else None))
         self.send_response(self.server.status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(self.server.body)))
@@ -119,12 +119,18 @@ class NetworkTests(unittest.TestCase):
             self.client.block_height()
 
     def test_node_info(self):
-        data = {"chain": {"header": {"chainId": 42}}, "extra": "retained"}
-        self.respond({"data": data})
+        data = {"chain_id": 42, "version": "1.7.1", "extra": "retained"}
+        self.respond(data)
         info = self.client.node_info()
         self.assertEqual((info.chain_id, info.data), (42, data))
+        self.assertEqual(self.server.requests[-1][0], "/on/node/info")
+        self.assertIsNone(self.server.requests[-1][2])
+        self.assertEqual(info.chain, "unknown")
+        snapshot = info.data
+        snapshot["chain_id"] = 0
+        self.assertEqual(info.data["chain_id"], 42)
         for chain_id in (None, -1, 256, True, 1.0, "42"):
-            self.respond({"data": {"chain": {"header": {"chainId": chain_id}}}})
+            self.respond({"chain_id": chain_id})
             with self.assertRaises(NetworkError):
                 self.client.node_info()
         self.respond({"data": {}})
@@ -139,7 +145,8 @@ class NetworkTests(unittest.TestCase):
                 Client(url)
         with self.assertRaises(TypeError):
             Client(None)
-        for timeout in (0, -1, float("inf"), float("nan"), True, None):
+        self.assertEqual(Client(self.url, timeout=0).timeout, 0)
+        for timeout in (-1, float("inf"), float("nan"), True, None):
             with self.assertRaises(ValueError):
                 Client(self.url, timeout=timeout)
         for version in ("", "x\r\nInjected: 1", None, "é"):
@@ -156,10 +163,18 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(self.server.requests, [])
 
     def test_timeout_and_transport_error_propagation(self):
-        with patch("w3sper.network.urlopen", side_effect=URLError("offline")) as opened:
-            with self.assertRaises(URLError):
+        with patch("w3sper.network.request", side_effect=OSError("offline")) as opened:
+            with self.assertRaises(OSError):
                 Client(self.url, timeout=0.25).query("answer")
-            self.assertEqual(opened.call_args.kwargs, {"timeout": 0.25})
+            self.assertEqual(opened.call_args.kwargs["timeout"], 0.25)
+
+    def test_operation_name_and_request_object(self):
+        self.client.query("query Answer {answer}", operation_name="Answer", variables={"value": 9})
+        self.assertEqual(self.server.requests[-1][2]["operationName"], "Answer")
+        self.client.query({"query": "{answer}", "variables": {}, "operationName": "Answer"})
+        self.assertEqual(self.server.requests[-1][2]["variables"], {})
+        with self.assertRaises(ValueError):
+            self.client.query({"query": "{answer}"}, variables={})
 
 
 if __name__ == "__main__":

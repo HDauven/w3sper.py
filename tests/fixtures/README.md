@@ -1,4 +1,53 @@
-# Fixed Go oracle vectors
+# Native reference fixtures
+
+All seeds are **public synthetic test data**, never production wallet secrets.
+Current compatibility is defined by the JS/native ABI at Rusk commit
+`97f1cf26eeeb62d56e656871087ae2f02d960d72`, not by another language port.
+
+## Current JS and Rust vectors
+
+`js-oracle.json` was generated independently by the coordinator using the actual
+pinned `w3sper.js` SDK and bundled wallet-core, not Python outputs. It contains
+6 public profiles/raw accounts, 9 BLS signatures, 7 deterministic transactions
+(including memo, contract, committed call, deployment and distinct-owner stake),
+2 real data-driver metadata/roundtrip sets, and 3 nonempty genesis note sets with
+ownership, balance, bookmark and selection expectations. The generator is
+`checks/js-oracle.mjs` in the isolated parity lab. Tests compare full transaction
+bytes and hashes, not just shapes.
+
+`bls-message-signing.txt` is the pinned Rust fixture from
+`wallet-core/tests/fixtures/bls-message-signing.txt`.
+
+`stake-driver.wasm` and `transfer-driver.wasm` are the pinned source's release
+WASM builds, used directly through Python's isolated driver runtime. `bob.wasm`
+is the existing `contracts/bin/bob.wasm`: byte-sized `init`, `reset` and `value`.
+`committed-target.wasm` is built from the included MPL-2.0 `.wat`, following
+`rusk/vm/tests/committed_call.rs::host_backed_target`. It accepts/stores/returns
+32 bytes and uses the host-backed B ABI required for committed calls. Bob uses
+the legacy A ABI and is **not** a committed target.
+
+SHA-256:
+
+| File | Digest |
+| --- | --- |
+| stake-driver.wasm | `489ee7354c89eca3cbc870e3d146aba209bb02691e4864ce93dd04759f2902e3` |
+| transfer-driver.wasm | `983a9794178a04165319c4d7be583f2530d1b14a0ca19d061c99f60c60264966` |
+| bob.wasm | `b9927fe73c106888910da15b878cf7888040f88c1325565137e34c886877c27d` |
+| committed-target.wasm | `81c11fbf30bb0a5eff376b11e1a754adb47f799afc4f98b38a1ffb1e2c4a291c` |
+
+`phoenix-native.json` is a **native/live roundtrip**, not an independent JS
+expected-value corpus. It freezes actual owned notes, openings, root, RNG,
+unproven transaction/circuits, node-generated proof, and native proven bytes.
+The exact reference node successfully preverified that proof; it was not
+propagated. Python replay tests exercise the real native construction/proof
+attachment ABI offline. Live tests separately proved, propagated and verified
+state effects for every Phoenix transaction family.
+
+## Historical Go regression vectors
+
+These retained older fixtures protect existing behavior only; they do not
+define current ABI compatibility. Tests omit their obsolete module-size and
+invalid-overflow transaction assumptions.
 
 `go-vectors.json` was emitted by `go_oracle.go`, run in a separate temporary
 module with a local `replace` to the **unchanged** `w3sper.go` directory of:

@@ -1,148 +1,286 @@
 # w3sper.py
 
-A Python SDK for Dusk, importable as `w3sper`, with profile derivation,
-Moonlight transaction signing, unit conversions, and a GraphQL client.
-
-Key derivation and signing use the bundled `wallet-core-1.7.1.wasm` module
-through [Wasmtime](https://github.com/bytecodealliance/wasmtime-py), the only
-runtime dependency.
+A Python SDK for Dusk: Moonlight and Phoenix wallets, transfers, conversions,
+staking, contract deployment, WASM data drivers, GraphQL, and RUES events.
+Cryptography and transaction serialization run in the bundled Dusk wallet-core
+WASM through Wasmtime. WebSocket transport uses `websockets`; HTTP uses the
+Python standard library. Python 3.11+ is required.
 
 ## Install
-
-Requires Python 3.11+ on a platform supported by Wasmtime.
 
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install 'w3sper @ git+ssh://git@github.com/HDauven/w3sper.py.git@main'
+python -m pip install .
 ```
 
-For a local checkout, replace the last command with `python -m pip install .`.
-The WASM module is included in the package; signing needs no node connection.
+The wheel includes wallet-core; offline signing needs no node or JavaScript
+runtime. See [NOTICE.md](NOTICE.md) for the pinned artifact and licenses.
 
-## Offline transfer
+## Public profiles and signing
 
 ```python
-from w3sper import Bookkeeper, Generator, WalletCore, parse_from_dusk
+from w3sper import Bookkeeper, ProfileGenerator, WalletCore, parse_from_dusk
 
-# PUBLIC TEST SEED. Never put funds in accounts derived from this seed.
+# PUBLIC TEST SEED. Never use this seed for real funds.
 seed = bytes((i * 7 + 1) & 255 for i in range(64))
-with WalletCore() as core:
-    profiles = Generator(seed, core)
-    sender = profiles.default()                 # SigningProfile at index 0
-    receiver = profiles.next().profile          # public Profile at index 1
-    result = (
-        Bookkeeper(core).bind(sender).transfer()
-        .amount(parse_from_dusk("1"))           # integer Lux, 9 decimals per Dusk
-        .chain(42)
-        .nonce(0)                              # CURRENT nonce; signs with 1
-        .to(receiver.account_id)               # Base58, 96-byte Moonlight key
-        .build()
-    )
-print(result.hash)  # 072cd70a7819c53f25028f5cb4f937b427823b5474d15871c4e309448fc5d133
+with WalletCore() as core, ProfileGenerator(seed, core) as profiles:
+    public = profiles.default()                  # public identity, index 0
+    receiver = profiles.next()                   # public identity, index 1
+    with profiles.signer(public) as signer:      # separately owned child keys
+        result = (
+            Bookkeeper(core).bind(signer).transfer(parse_from_dusk("1"))
+            .to(receiver.account).chain(42).nonce(0).build()
+        )
+print(result.hash)
+# 072cd70a7819c53f25028f5cb4f937b427823b5474d15871c4e309448fc5d133
 ```
 
-Run the complete example with `python examples/offline.py` after installation.
-It signs a real 293-byte transaction but does not submit it. `result.buffer`
-is the network transaction, **without** the WASM ABI length prefix; the hash
-is wallet-core's network-format lowercase hexadecimal string.
+`Profile(raw_160_bytes)` contains only an address (64 bytes) and account
+(96 bytes). `.address_id` and `.account_id` are Base58 identifiers. Parsing
+checks lengths, not curve points; wallet-core validates transaction keys.
+Public identities cannot sign or decrypt private balances.
 
-### Public data is not signing authority
+`ProfileGenerator(seed_or_provider, core)` caches public identities. `derive(i)`
+accepts 0..255; `default()` is index 0; `next()` starts at 1; `at(i)` only looks
+in the cache. Issuing a signer consults the provider again and checks that its
+keys match the original identity. Providers are synchronous callables returning
+64 bytes. Existing signers do not consult the provider during operations.
 
-- `Profile(raw_160_bytes)` contains only public address (64 bytes) and account
-  (96 bytes). `.address`, `.account` and `bytes(profile)` return immutable bytes;
-  `.address_id` and `.account_id` return Base58 strings. Parsing verifies lengths,
-  not curve points; wallet-core validates receiver points during signing.
-- `SigningProfile(core, seed, index)` derives public keys and retains a copied
-  64-byte seed. Its `.profile` is public; `.index` is bounded to 0..255.
-  `Bookkeeper.bind(public_profile)` allows balance lookup, **never signing**.
-- `Generator(seed, core)` caches signing profiles. `default()` is always index 0;
-  `next()` starts at 1 even if called first, and fails after 255. `derive(index)`
-  is idempotent; `at(index)` only looks in the cache. `index_of()` uses generator
-  identity, not public-key equality.
-- Seeds are omitted from repr and the host's WASM seed buffer is wiped before
-  freeing. Python/native runtime memory is **not guaranteed to be securely
-  erased**. Do not log, pickle or `dataclasses.asdict()` seed-bearing objects.
-  Closing `WalletCore` does not erase seeds retained by a generator/signer.
+`ProfileSigner.sign_bls_message(bytes)` signs exact bytes using Dusk BLS V2,
+returning 48 bytes. No prefix, prehash, approval, origin binding, or replay
+protection is added. `dispose()`/`close()` rejects new operations and stale
+in-flight results while retaining readable public identity. Owned mutable
+keys/snapshots and native secret buffers are wiped best-effort; Python/runtime
+copies are **not guaranteed to be erased**. Do not pickle or log key material.
+Disposal cannot revoke transactions already sent.
 
-### Values, gas and bookkeeping
+For compatibility, `Generator(seed, core)` returns cached signers rather than
+public identities; its `close()` disposes them. `SigningProfile` is a
+compatibility name for `ProfileSigner`, now retaining child keys, not a seed.
+Closing `ProfileGenerator` does not revoke independently issued signers.
 
-`format_to_dusk(int)` / `parse_from_dusk(str)` are exact; no float, exponent,
-negative value or rounding. `"1."` is accepted. Conversions use arbitrary
-Python integers; signing enforces unsigned 64-bit values. Boolean values are
-not integers at API boundaries. Chain IDs and derivation indices are u8.
+## Migrating existing callers
 
-`Gas(limit=None, price=None)` defaults to limit `2_900_000_000`, price `1`;
-None/non-positive arguments select those defaults. `.total` is exact.
-`Bookmark(data)` wraps eight bytes; `Bookmark.from_int(n)` is strictly u64,
-`int(bookmark)` reads little-endian, and `.is_none` recognizes all-ff.
-Negative and overflowing bookmark integers are rejected.
-`base16_*` and `base58_*` provide strict encodings (Bitcoin alphabet, no checksum).
+See [CHANGELOG.md](CHANGELOG.md) for the unreleased API changes.
 
-Builders are immutable: keep the return value of `.amount()`, `.deposit()`,
-`.gas(Gas(...))`, `.chain()`, `.nonce()` and `.to()`. Routes cannot alter each other.
-Chain ID is required explicitly. `nonce(n)` means the **current** account nonce;
-`build()` signs with `n + 1` and rejects overflow. By contrast,
-`WalletCore.moonlight(..., nonce=n, chain_id=...)` takes the **final** nonce.
+- Prefer `ProfileGenerator` for public identities and explicitly issue a signer
+  with `profiles.signer(public)` before binding a signing `Bookkeeper` entry.
+  The compatibility `Generator` still returns cached signers, not public profiles.
+- Close/dispose signers on wallet lock. Provider refusal or closing the public
+  generator does not revoke independently issued signers. Signing capabilities
+  now own selected child keys rather than retaining a master seed.
+- Upgrade the SDK and bundled wallet-core together; the previous host ABI is not
+  compatible with the current artifact. Low-level `moonlight` nonce arguments are
+  final nonces, while high-level transfer builders take the current nonce.
+- Treat builders as immutable, retain fluent return values, close streams when
+  stopping early, and check execution errors after submission.
+- Revalidate explicit amounts/gas and follow the synchronous cancellation limits
+  below; permissive numeric coercion and instant interruption are not guaranteed.
 
-For caller-managed state, pass `Bookkeeper(core, account_balance=lookup)` where
-`lookup(raw_96_byte_account)` returns `AccountBalance(nonce=..., value=...)`.
-Use `.balance(account_id)` or `.bind(profile).balance()`; builders without an
-explicit nonce use that callback. There is no balance sufficiency check,
-network sync, nonce reservation, retry, or protection against stale snapshots.
-Repeated/concurrent builds can reuse a nonce; applications must coordinate it.
+## Network and wallet state
 
-### GraphQL over stdlib HTTP
+This independent example creates fresh live contexts and **submits a Phoenix
+transfer**. Set the environment variables to a disposable funded node/wallet
+and its stake data-driver file. Never use production funds for examples.
 
 ```python
-from w3sper import Client
+import os
+from w3sper import (
+    AccountSyncer, Bookkeeper, Network, ProfileGenerator, STAKE, Treasury, WalletCore,
+)
 
-node = Client("http://127.0.0.1:8080", timeout=10)
-height = node.block_height()       # exact JSON integer or decimal-string height
-chain_id = node.node_info().chain_id
-raw_data = node.query("block(height: -1) { header { height } }")
+seed = bytes.fromhex(os.environ["W3SPER_SEED"])
+index = int(os.environ.get("W3SPER_PROFILE_INDEX", "20"))
+with WalletCore() as core, ProfileGenerator(seed, core) as profiles:
+    receiver = profiles.derive(index + 1)
+    with profiles.signer(profiles.derive(index)) as signer, Network(
+        os.environ["W3SPER_NODE_URL"], core=core, timeout=120
+    ) as network:
+        network.data_drivers.register(STAKE, os.environ["W3SPER_STAKE_DRIVER"])
+        info = network.node_info()                 # POST /on/node/info
+        height = network.block_height()
+        balance, = AccountSyncer(network).balances([signer.profile])
+        network.connect()                         # real RUES WebSocket session
+        network.ping_websocket(timeout=5)          # nonce-matched pong
+
+        treasury = Treasury().sync(network, [signer])
+        entry = Bookkeeper(core, treasury=treasury).bind(signer)
+        public_balance = entry.balance()
+        private_balance = entry.balance("address") # value and spendable
+        tx, executed = network.execute_and_wait(
+            entry.transfer(123).to(receiver.address).memo("hello")
+        )
+        if executed.payload["err"] is not None:
+            raise RuntimeError(executed.payload["err"])
+        treasury.sync(network, [signer])
 ```
 
-Requests POST JSON to `<base path>/graphql`, with `rusk-version: 1.0.0-rc.0`
-(overridable). Selection sets are wrapped; full documents and `variables={...}`
-are supported. `query()` raises `GraphQLError` (with errors and partial data),
-`HTTPStatusError`, or `NetworkError` for malformed responses. urllib transport
-errors propagate. Missing/malformed node fields raise instead of silently
-becoming chain/height zero. `query_raw()` checks HTTP status/nonempty body only.
-Use HTTPS for remote nodes.
+The shorter snippets below belong inside equivalent open network/signer/core
+contexts; the scopes above dispose their resources when exited.
 
-## Scope and lifecycle
+`Network` and `Client` name the same synchronous client. HTTP reads do not
+require `connect()`. `ping()` probes HTTP, `connected` reports local socket
+state, and `ping_websocket()` requires a fresh pong on that socket. `disconnect()`
+does not cancel unrelated HTTP reads; `close()` also releases internally owned
+wallet-core and registry resources.
 
-**Supported:** values/encodings, public profiles, deterministic profile
-derivation, offline Moonlight value-transfer signing, caller-backed balances,
-and minimal GraphQL HTTP queries.
+`query(selection_or_document, variables=..., operation_name=...)` supports full
+GraphQL request dictionaries too. `query_raw()` preserves the response bytes.
+`GraphQLError` retains errors and partial data; `HTTPStatusError` retains status
+and body. Node metadata, CRS, provisioners and block gas-price statistics are
+available through `network.node` and `network.blocks`.
 
-**Not supported:** Phoenix sync/balances/transfers/proving, staking, deployment,
-contract data drivers/payloads, RUES/WebSockets, or live preverify/propagate and
-confirmation. Phoenix destinations/balances raise `NotImplementedError`.
+Account sync supports `.balances()`, `.stakes()`, `.stake_keys()` and
+`.history(profile, from_height=0, to_height=None, limit=None, order="asc")`.
+History is a closable iterator of enriched entries with exact amounts, fees,
+block metadata, memo, method and success. Enrichment is matched by GraphQL alias,
+not response-object order, avoiding the pinned JS history association defect.
+Stake owner lookup requires the
+stake data driver registered under `STAKE`.
 
-Use `WalletCore` as a context manager or call idempotent `.close()`. One lock
-serializes each instance, including output copying/freeing and close. Outputs
-survive later calls and close. Operations after close raise `ClosedError`;
-nonzero WASM statuses raise `CodeError(operation, code)`. A runtime trap or
-invalid output ABI closes the instance. Use independent instances for parallel
-signing; each instance compiles its own copy of the module.
+`AddressSyncer` provides `.notes(signers, from_=height_or_bookmark)`, `.spent()`,
+`.openings()` and `.root()`. Note streams yield `(owned_maps, sync_info)`, where
+maps associate immutable nullifier bytes with archived note-leaf bytes.
+`on_progress(callback)` returns a stop function. Scans process bounded batches
+without ownership worker threads, preserve partial HTTP chunks, and reject
+truncated leaves. Spent queries are batched below the node's request limit.
+Always close a stream when stopping early:
 
-## Checks
+```python
+from w3sper import AddressSyncer, Bookmark
+
+with AddressSyncer(network).notes([signer], from_=Bookmark.from_int(0)) as stream:
+    for owned, cursor in stream:
+        print(len(owned[0]), cursor["bookmark"])
+```
+
+`Treasury` is optional in-memory storage. Applications own persistence,
+snapshot freshness and nonce coordination. A custom treasury supplies
+`account`, `address`, `stake_info`, and `stake_keys` read methods. The existing
+`Bookkeeper(core, account_balance=callback)` form still works. Neither builders
+nor treasury reserve nonces/notes; concurrent builds can spend the same state.
+
+## Transactions
+
+Builders are immutable: retain every fluent method's return value.
+`build(network)` signs locally, resolves missing chain/nonce state, and obtains
+openings/proofs for Phoenix. `network.execute(builder_or_result)` performs
+preverify then propagate; **HTTP admission is not successful execution**.
+`execute_and_wait()` subscribes before propagation and returns the execution
+event. Check `executed.payload["err"]`. `.gas_paid`, `.memo(as_text=True)` and
+`.call()` expose execution details.
+
+- `entry.transfer(amount).to(account_or_address)` selects Moonlight/Phoenix.
+  `.memo(text_or_bytes)`, `.deposit(lux)` and `.payload(ContractCall(...))`
+  attach native transaction data. Phoenix transfers are always obfuscated.
+- `entry.shield(amount)` / `entry.unshield(amount)` convert between the same
+  profile's public and private balances.
+- `entry.deploy(bytecode, init_args=b"...", deploy_nonce=7, owner=owner_bytes,
+  payment="account" or "address")` deploys publicly or privately. Use
+  `init_args=None` to omit initialization. Results
+  include `contract_id`; `.account_nonce(n)` sets the current public nonce,
+  while deployment `.nonce(n)` means the deployment nonce.
+- `entry.stake(amount, owner_signer=owner)`, `.topup(amount)`,
+  `.unstake(amount=None)` and `.withdraw(amount)` support either payment kind.
+  `.owner_signers([...])` resolves an existing on-chain owner. A distinct owner
+  must have its own signer from the same generator. Contract-owned stakes
+  require contract authority and cannot be managed with wallet keys.
+- `.committed()` requires a zero-value/deposit public self-envelope with a
+  `ContractCall` payload. The target must support Rusk's host-backed **B ABI**;
+  a legacy A-ABI contract is not a valid committed-call target.
+
+`nonce(n)` on a transfer is the **current** nonce; it signs with `n + 1`.
+Low-level `WalletCore.moonlight[_with_key](..., nonce=n)` takes the final nonce.
+Results contain owned network bytes without host ABI prefixes. Phoenix results
+include spent nullifiers. Proof attachment does not itself verify a proof;
+node preverification/execution does.
+
+## Contracts and data drivers
+
+```python
+from w3sper import Contract, STAKE, TRANSFER
+
+network.data_drivers.register(STAKE, "dusk_stake_contract_dd_opt.wasm")
+network.data_drivers.register(TRANSFER, "dusk_transfer_contract_dd_opt.wasm")
+transfer = entry.contract(TRANSFER, network)
+assert transfer.call("chain_id") == network.node_info().chain_id
+encoded = transfer.encode("sync_accounts", ["0", "5"])
+print(transfer.schema(), transfer.version())
+
+with transfer.events("deposit").subscribe() as events:
+    tx, executed = network.execute_and_wait(
+        transfer.tx("deposit", 2).to(signer.account).deposit(2)
+    )
+    print(events.get(timeout=30))
+```
+
+Registry locators can be paths, HTTP(S) URLs, WASM bytes, or synchronous
+byte-provider callables. Instances are initialized once, cached, serialized,
+and closed by the registry. `DataDriver` exposes `encode_input_fn`,
+`decode_input_fn`, `decode_output_fn`, `decode_event`, `get_schema`, and
+`get_version`. `.encode(name, value)` accepts Python JSON values; large integers
+are exact and driver-defined u64 outputs often use decimal strings. Driver
+instances have checked export signatures, bounded output/memory/fuel, typed
+native errors, and fail closed on traps or malformed native output.
+
+Contract events can use `.once()`, a context-managed `.subscribe()`, or
+`.on(callback)` returning a closable subscription. Raw RUES scopes are available
+via `network.rues.scope(name)`, with `.with_id(id)`, `.call(topic, body)`,
+`.subscribe(topic)`, `.once(topic)` and `.on(topic, callback)`. Registrations are
+shared per session/path; stopping the last consumer sends DELETE. Queues are
+bounded and fail on overflow rather than dropping events. Disconnect does not
+replay missed events or reconnect automatically.
+
+## Bounds and cancellation
+
+Amounts, nonces and bookmarks are u64; indices and chain IDs are u8. Booleans
+and floats are rejected as integers. `Gas(limit=None, price=None)` defaults to
+2,900,000,000 and 1; explicit values must be positive u64 and their product must
+fit u64. Builders also reject overflowing aggregate spend. Decimal conversions
+are exact: no floats, exponents, negative values, rounding, or trailing decimal
+point. Malformed payloads are rejected rather than silently omitted.
+
+Network/read timeouts are **seconds**, default 120. Zero disables the deadline;
+`None` is invalid. Pass a `CancellationToken` as `cancel=` and call `.cancel()`
+from another thread. Deadlines cover headers, bodies and stream consumption;
+paused streams release resources on cancellation/expiry. TCP, TLS, WebSocket
+upgrade/session handshake, event waits and HTTP bodies are cancellable.
+
+Two synchronous boundaries cannot be forcibly interrupted: the operating
+system's `socket.getaddrinfo()` DNS resolver, and application-provided Python
+callbacks/providers or synchronous WASM work. Cancellation is checked before
+and after these stages; no abandoned request/resolver threads are spawned.
+Use an IP literal when a strict connection deadline must avoid system DNS.
+Callbacks must return promptly. Data-driver WASM execution has an independent
+fuel bound. Registration timeout does not limit a continuous listener's
+lifetime; cancellation or `.close()` does.
+
+## Checks and examples
 
 ```sh
 python -m pip install -e . build
 python -m unittest discover -s tests -v
-python -m build
 python examples/offline.py
+python -m build
 ```
 
-Tests exercise real WASM, full signed bytes/hashes, malformed boundaries, error
-statuses, exact allocation/free sizes, output ownership, concurrency, lifecycle,
-and a local HTTP server. See [test vectors](tests/fixtures/README.md) for the
-cross-language fixtures and how to regenerate them.
-CI builds both package formats and tests the installed wheel outside the source tree.
+The tests use the real wallet-core and data-driver modules, fixed JS/Rust
+vectors, and local HTTP/WebSocket servers. See [fixtures](tests/fixtures/README.md).
+A live acceptance entrypoint exercises funded profiles, public/shielded
+transactions, rejection paths, history, staking, deployment and committed calls:
+
+```sh
+python examples/live_parity.py --node "$W3SPER_NODE_URL" --seed "$W3SPER_SEED" \
+  --index 20 --driver-dir tests/fixtures --contract tests/fixtures/bob.wasm \
+  --committed-contract tests/fixtures/committed-target.wasm --output live.json
+```
+
+This command submits transactions. It needs a disposable Phoenix-enabled node
+funding only the assigned profiles `index..index+3`, with a distinct-owner reward
+fixture at `index+3`. It emits JSON results and verifies state effects; never use
+it against production funds. Individual families can be selected with `--groups`.
 
 ## License
 
-[Mozilla Public License 2.0](LICENSE). See [NOTICE.md](NOTICE.md) for third-party notices.
+[Mozilla Public License 2.0](LICENSE). Third-party details: [NOTICE.md](NOTICE.md).

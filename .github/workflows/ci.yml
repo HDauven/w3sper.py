@@ -27,3 +27,13 @@ jobs:
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/w3sper-wheel/bin/python" -I -m unittest discover -s "$GITHUB_WORKSPACE/tests" -v
           "$RUNNER_TEMP/w3sper-wheel/bin/python" -I "$GITHUB_WORKSPACE/examples/offline.py"
+      - name: Install source distribution and test its packaged fixtures
+        run: |
+          python -m venv "$RUNNER_TEMP/w3sper-sdist"
+          "$RUNNER_TEMP/w3sper-sdist/bin/python" -m pip install dist/*.tar.gz
+          mkdir "$RUNNER_TEMP/w3sper-source"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/w3sper-source" --strip-components=1
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/w3sper-sdist/bin/python" -I -m unittest discover -s "$RUNNER_TEMP/w3sper-source/tests" -v
+          "$RUNNER_TEMP/w3sper-sdist/bin/python" -I "$RUNNER_TEMP/w3sper-source/examples/offline.py"
+          "$RUNNER_TEMP/w3sper-sdist/bin/python" -I "$RUNNER_TEMP/w3sper-source/examples/live_parity.py" --help

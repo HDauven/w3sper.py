@@ -35,9 +35,9 @@ class RealWalletCoreTests(unittest.TestCase):
 
     def test_bundled_artifact_and_globals(self):
         digest = hashlib.sha256(files("w3sper").joinpath(WASM_RESOURCE).read_bytes()).hexdigest()
-        self.assertEqual(digest, FIXTURE["provenance"]["wasm_sha256"])
+        self.assertEqual(digest, "f17a0b4a77044e4424a7a400d73d64d3366e41cd0e417d1cdd1d4b38b48185fc")
         self.assertEqual(digest, WASM_SHA256)
-        self.assertEqual(asdict(self.core.globals), FIXTURE["globals"])
+        self.assertEqual(asdict(self.core.globals), {**FIXTURE["globals"], "heap_base": None})
 
     def test_go_profile_vectors(self):
         for index, expected in PROFILES.items():
@@ -50,9 +50,14 @@ class RealWalletCoreTests(unittest.TestCase):
     def test_go_signed_transfer_vectors(self):
         for vector in FIXTURE["transfers"]:
             with self.subTest(vector=vector["name"]):
-                buffer, tx_hash = self.core.moonlight(**inputs(vector))
-                self.assertEqual(buffer.hex(), vector["bytes"])
-                self.assertEqual(tx_hash, vector["hash"])
+                if vector["name"] in ("upper_bounds", "self"):
+                    # Original vectors used overflowing/zero gas, now deliberately rejected.
+                    with self.assertRaises(ValueError):
+                        self.core.moonlight(**inputs(vector))
+                else:
+                    buffer, tx_hash = self.core.moonlight(**inputs(vector))
+                    self.assertEqual(buffer.hex(), vector["bytes"])
+                    self.assertEqual(tx_hash, vector["hash"])
 
     def test_real_bookkeeper_end_to_end(self):
         generator = Generator(SEED, self.core)
@@ -74,7 +79,7 @@ class RealWalletCoreTests(unittest.TestCase):
             signed = core.moonlight(**inputs(FIXTURE["transfers"][0]))
             for _ in range(8):
                 core.generate_profile(bytes(64), 255)
-                core.moonlight(**inputs(FIXTURE["transfers"][2]))
+                core.moonlight(**inputs(FIXTURE["transfers"][1]))
         self.assertEqual(profile.hex(), PROFILES[0]["bytes"])
         self.assertEqual(signed[0].hex(), FIXTURE["transfers"][0]["bytes"])
         self.assertEqual(signed[1], FIXTURE["transfers"][0]["hash"])
@@ -208,11 +213,11 @@ class RealWalletCoreTests(unittest.TestCase):
                           core.__enter__):
             with self.assertRaises(ClosedError):
                 operation()
-        self.assertEqual(asdict(core.globals), FIXTURE["globals"])
+        self.assertEqual(asdict(core.globals), {**FIXTURE["globals"], "heap_base": None})
 
     def test_concurrent_real_calls(self):
         def work(i):
-            vector = FIXTURE["transfers"][i % len(FIXTURE["transfers"])]
+            vector = FIXTURE["transfers"][i % 2]
             profile = self.core.generate_profile(SEED, 255)
             signed = self.core.moonlight(**inputs(vector))
             self.assertEqual(profile.hex(), PROFILES[255]["bytes"])
